@@ -27,7 +27,10 @@ services:
     env_file:
       - .env
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      # BACKEND_URL is server-side only — read by next.config.js at startup,
+      # never embedded in the client bundle. The browser uses relative /api/*
+      # paths and the Next.js proxy forwards them here.
+      - BACKEND_URL=http://backend:8000
     depends_on:
       backend:
         condition: service_healthy

@@ -17,6 +17,7 @@ from app.services.world_bank import (
     adjust_heat_score_for_climate,
 )
 from app.services.report_generator import generate_narrative
+from app.services.climada_engine import get_flood_adjustment, get_storm_adjustment
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,7 +55,7 @@ async def assess_climate_risk(request: RiskRequest) -> RiskReport:
         flood_task, heat_task, storm_task, projections_task
     )
 
-    # Step 3: Apply World Bank climate projections as adjustments
+    # Step 3a: Apply World Bank climate projections as adjustments
     adjusted_flood_score = adjust_flood_score_for_climate(flood_risk.score, projections)
     if adjusted_flood_score != flood_risk.score:
         flood_risk = HazardScore(
@@ -72,6 +73,32 @@ async def assess_climate_risk(request: RiskRequest) -> RiskReport:
             confidence=heat_risk.confidence,
             details={**heat_risk.details, "climate_adjustment": round(adjusted_heat_score - heat_risk.score, 3)}
         )
+
+    # Step 3b: Apply CLIMADA hazard-model adjustments (run in parallel, both optional)
+    climada_flood_task  = asyncio.create_task(get_flood_adjustment(lat, lon))
+    climada_storm_task  = asyncio.create_task(get_storm_adjustment(lat, lon))
+    (climada_flood_adj, climada_flood_meta), (climada_storm_adj, climada_storm_meta) = \
+        await asyncio.gather(climada_flood_task, climada_storm_task)
+
+    if climada_flood_adj != 0.0:
+        new_flood_score = round(min(max(flood_risk.score + climada_flood_adj, 0.0), 1.0), 3)
+        flood_risk = HazardScore(
+            score=new_flood_score,
+            level=score_to_level(new_flood_score),
+            confidence=flood_risk.confidence,
+            details={**flood_risk.details, "climada": climada_flood_meta},
+        )
+        logger.debug("CLIMADA flood adj %+.3f → score %.3f", climada_flood_adj, new_flood_score)
+
+    if climada_storm_adj != 0.0:
+        new_storm_score = round(min(max(storm_risk.score + climada_storm_adj, 0.0), 1.0), 3)
+        storm_risk = HazardScore(
+            score=new_storm_score,
+            level=score_to_level(new_storm_score),
+            confidence=storm_risk.confidence,
+            details={**storm_risk.details, "climada": climada_storm_meta},
+        )
+        logger.debug("CLIMADA storm adj %+.3f → score %.3f", climada_storm_adj, new_storm_score)
 
     # Step 4: Compute overall risk score
     scores = [flood_risk.score, heat_risk.score, storm_risk.score]
@@ -92,6 +119,11 @@ async def assess_climate_risk(request: RiskRequest) -> RiskReport:
         data_sources.append("NOAA Climate Data Online")
     if "World Bank" in str(projections.get("source", "")):
         data_sources.append("World Bank Climate Change Knowledge Portal")
+    if climada_flood_meta.get("climada") not in (None, "disabled (enable_climada=False)", "timeout", "dependency missing") \
+            and "error" not in str(climada_flood_meta.get("climada", "")):
+        data_sources.append("CLIMADA River Flood Hazard (ISIMIP)")
+    if climada_storm_meta.get("climada") == "tropical_cyclone":
+        data_sources.append("CLIMADA TropCyclone / IBTrACS")
 
     # Step 6: Assemble partial report for narrative generation
     partial_report = RiskReport(

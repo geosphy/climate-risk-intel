@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"app/page.tsx -> @/components/RiskMap\":{\"id\":\"app/page.tsx -> @/components/RiskMap\",\"files\":[\"static/chunks/_app-pages-browser_src_components_RiskMap_tsx.js\"]},\"components/RiskMap.tsx -> leaflet\":{\"id\":\"components/RiskMap.tsx -> leaflet\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_leaflet_dist_leaflet-src_js.js\"]}}"
