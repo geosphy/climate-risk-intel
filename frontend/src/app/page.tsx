@@ -137,7 +137,7 @@ export default function HomePage() {
               🌍
             </span>
             <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              ClimateRisk Intel
+              Geosphy™
             </h1>
           </div>
           <p className="text-blue-200/70 text-sm sm:text-base mb-8 max-w-lg mx-auto">
