@@ -1,121 +1,78 @@
 """
-AI narrative report generator using the Claude API.
-Converts structured risk scores into plain English risk reports.
-Requires ANTHROPIC_API_KEY environment variable.
+AI narrative generator for Data Center climate risk reports.
+Generates CSRD/ESRS E1-aligned plain English risk summaries using Claude API.
 """
 import logging
-from app.models.schemas import RiskReport
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-async def generate_narrative(report: RiskReport) -> str:
-    """
-    Generate an AI-written risk narrative using Claude.
-
-    Uses the async Anthropic client so the FastAPI event loop is never blocked.
-    Falls back to a template-based narrative if the API key is absent or the
-    call fails.
-
-    Args:
-        report: Partially assembled RiskReport (without narrative)
-
-    Returns:
-        Plain English 3-paragraph risk narrative string
-    """
+async def generate_dc_narrative(report) -> str:
+    """Generate a data center-specific climate risk narrative."""
     settings = get_settings()
 
     if not settings.anthropic_api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — skipping AI narrative")
-        return _fallback_narrative(report)
+        return _fallback_dc_narrative(report)
 
     try:
         import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-        message = await client.messages.create(
+        prompt = f"""You are a climate risk analyst writing an ESRS E1-aligned physical risk assessment 
+for a data center asset. Write a concise 3-paragraph report.
+
+DATA CENTER LOCATION: {report.canonical_address}
+OVERALL RISK: {report.overall_risk_level} (score: {report.overall_risk_score:.2f}/1.0)
+
+CLIMATE RISK PILLARS:
+- Thermal/Heat Risk: {report.thermal_risk.level} — Avg summer temp: {report.thermal_risk.avg_summer_temp_c}°C, Days >35°C/yr: {report.thermal_risk.days_above_35c}, ASHRAE: {report.thermal_risk.ashrae_class_required}
+- Flood Risk: {report.flood_risk.level} — Zone: {report.flood_risk.zone}
+- Water Stress: {report.water_risk.level} — WRI Index: {report.water_risk.water_stress_index}/5, WUE status: {report.water_risk.wue_compliance_status}
+- Storm/Wind Risk: {report.storm_risk.level}
+- Power Grid: {report.power_grid_risk.level} — Renewables: {report.power_grid_risk.renewable_energy_pct}%, Carbon: {report.power_grid_risk.carbon_intensity_gco2_kwh} gCO2/kWh
+
+EU REGULATORY STATUS:
+- ESRS E1 Score: {report.regulatory_compliance.esrs_e1_physical_risk_score}/100
+- CSRD Materiality: {report.regulatory_compliance.csrd_materiality}
+- EU Taxonomy: {report.regulatory_compliance.eu_taxonomy_alignment}
+- Required disclosures: {", ".join(report.regulatory_compliance.required_disclosures)}
+
+Write exactly 3 paragraphs:
+1. Physical risk summary: Key climate hazards and their operational implications for this data center.
+2. EU regulatory exposure: CSRD/ESRS E1 materiality, EU Taxonomy alignment, and WUE regulation requirements.
+3. Recommended actions: Specific adaptation and compliance measures the operator should prioritize.
+
+Be specific, technical, and actionable. Use precise KPI values from the data above."""
+
+        message = client.messages.create(
             model="claude-3-5-haiku-20241022",
-            max_tokens=600,
-            messages=[{"role": "user", "content": _build_prompt(report)}],
+            max_tokens=700,
+            messages=[{"role": "user", "content": prompt}]
         )
-
         return message.content[0].text.strip()
 
     except Exception as e:
-        logger.warning(f"Claude API narrative generation failed: {e}")
-        return _fallback_narrative(report)
+        logger.warning(f"DC narrative generation failed: {e}")
+        return _fallback_dc_narrative(report)
 
 
-def _build_prompt(report: RiskReport) -> str:
-    """Build the Claude prompt from structured risk data."""
-    flood  = report.flood_risk
-    heat   = report.heat_risk
-    storm  = report.storm_risk
-    overall = report.overall_risk
-
-    fema_zone       = flood.details.get("fema_zone", "Unknown")
-    fema_zone_desc  = flood.details.get("fema_zone_description", "")
-    sfha            = flood.details.get("sfha", False)
-
-    avg_max_temp_c      = heat.details.get("avg_max_temp_c", "N/A")
-    extreme_heat_days   = heat.details.get("extreme_heat_days_per_yr", "N/A")
-
-    avg_wind_ms         = storm.details.get("avg_wind_speed_ms", "N/A")
-    hurricane_coast     = storm.details.get("hurricane_coast", False)
-    severe_wind_days    = storm.details.get("severe_wind_days_per_yr", "N/A")
-
-    sfha_note = "Yes — mandatory flood insurance zone" if sfha else "No"
-
-    return f"""You are a climate risk analyst writing a report for a property owner.
-Write a concise 3-paragraph plain English climate risk assessment for this asset.
-
-LOCATION: {report.canonical_address}
-ASSET TYPE: Building
-
-RISK SCORES (0.0 = no risk, 1.0 = extreme risk):
-- Overall Risk:         {overall.level} ({overall.score:.2f})
-- Flood & Sea Level:    {flood.level} ({flood.score:.2f})
-    FEMA Zone:          {fema_zone} — {fema_zone_desc}
-    In SFHA:            {sfha_note}
-- Extreme Heat:         {heat.level} ({heat.score:.2f})
-    Avg annual max temp: {avg_max_temp_c}°C
-    Extreme-heat days/yr (≥35°C): {extreme_heat_days}
-- Storm & Wind:         {storm.level} ({storm.score:.2f})
-    Avg wind speed:     {avg_wind_ms} m/s
-    Severe wind days/yr: {severe_wind_days}
-    Hurricane coast:    {hurricane_coast}
-
-Write exactly 3 paragraphs:
-1. Overall risk summary (2-3 sentences): Summarise the overall climate risk profile of this asset.
-2. Key hazard details (3-4 sentences): Describe the most significant hazards and their specific implications for the property.
-3. Recommended actions (2-3 sentences): Provide practical, actionable steps the asset owner can take to reduce risk and improve resilience.
-
-Keep language clear and accessible to a non-expert reader. Avoid jargon. Be specific to this location. Do not use bullet points or headers."""
-
-
-def _fallback_narrative(report: RiskReport) -> str:
-    """Generate a basic template narrative when the Claude API is unavailable."""
-    overall = report.overall_risk
-    flood   = report.flood_risk
-    heat    = report.heat_risk
-    storm   = report.storm_risk
-
-    fema_zone = flood.details.get("fema_zone", "Unknown")
-    sfha      = flood.details.get("sfha", False)
-    sfha_note = " This property falls within FEMA's Special Flood Hazard Area, meaning federally-backed mortgages require flood insurance." if sfha else ""
-
+def _fallback_dc_narrative(report) -> str:
+    reg = report.regulatory_compliance
     return (
-        f"This property at {report.canonical_address} has been assessed with an overall "
-        f"climate risk level of {overall.level} (score: {overall.score:.2f}). "
-        f"The assessment draws on FEMA flood maps, NOAA historical climate records, and "
-        f"World Bank SSP2-4.5 climate projections for 2040–2059.\n\n"
-        f"The three primary hazards are: flood risk ({flood.level}, FEMA Zone {fema_zone}){sfha_note}, "
-        f"extreme heat risk ({heat.level}), and storm and wind risk ({storm.level}). "
-        f"Climate change is expected to intensify all three hazards over the coming decades, "
-        f"increasing both the frequency and severity of extreme events at this location.\n\n"
-        f"Asset owners should review flood insurance requirements with their lender or insurer, "
-        f"consider heat-resilience upgrades such as improved insulation and cooling systems, "
-        f"and ensure the building envelope meets current wind-resistance standards. "
-        f"A professional climate risk assessment is recommended for detailed, site-specific mitigation planning."
+        f"This data center at {report.canonical_address} has been assessed with an overall "
+        f"climate risk level of {report.overall_risk_level}. The primary physical hazards are "
+        f"thermal stress ({report.thermal_risk.level}), flood risk ({report.flood_risk.level}), "
+        f"and water stress ({report.water_risk.level}), which together impact cooling efficiency, "
+        f"operational continuity, and water consumption compliance.\n\n"
+        f"From an EU regulatory perspective, the ESRS E1 physical risk exposure score is "
+        f"{reg.esrs_e1_physical_risk_score}/100, with a CSRD materiality assessment of "
+        f"\"{reg.csrd_materiality}\". EU Taxonomy alignment is classified as "
+        f"\"{reg.eu_taxonomy_alignment}\". The following disclosures are required: "
+        f"{\', \'.join(reg.required_disclosures)}.\n\n"
+        f"Recommended actions include conducting a detailed ESRS E1 physical risk scenario "
+        f"analysis, implementing a water efficiency plan to meet the EU WUE target of 0.4 L/kWh, "
+        f"and reviewing cooling system resilience for projected temperature increases by 2050. "
+        f"A DORA ICT continuity review is {'recommended' if reg.dora_ict_risk_flag else 'not immediately required'} "
+        f"based on current flood and thermal risk levels."
     )
