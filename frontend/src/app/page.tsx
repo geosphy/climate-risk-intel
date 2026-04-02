@@ -13,7 +13,7 @@
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { RiskReport } from "@/types/risk";
-import { assessRisk, checkHealth, APIError, HealthStatus } from "@/lib/api";
+import { assessRisk, APIError } from "@/lib/api";
 import SearchBar from "@/components/SearchBar";
 import RiskDashboard from "@/components/RiskDashboard";
 import RiskReportComponent from "@/components/RiskReport";
