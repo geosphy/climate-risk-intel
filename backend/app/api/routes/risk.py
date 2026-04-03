@@ -28,6 +28,10 @@ from app.services.datacenter_kpis import (
     compute_power_grid_kpis, compute_regulatory_kpis
 )
 from app.services.report_generator import generate_dc_narrative
+from app.services.asset_enrichment import (
+    get_asset_level_factors,
+    apply_asset_level_adjustments,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -67,6 +71,22 @@ async def assess_datacenter_risk(request: RiskRequest) -> DataCenterRiskReport:
         flood_task, heat_task, storm_task, proj_task
     )
 
+    # Fetch asset-level factors (elevation, water proximity, UHI, power grid)
+    asset_factors = await get_asset_level_factors(lat, lon)
+    logger.info(
+        f"Asset factors: elevation={asset_factors.get('elevation_m')}m, "
+        f"water={asset_factors.get('water_proximity', {}).get('nearest_water_m')}m, "
+        f"UHI={asset_factors.get('urban_heat_island', {}).get('uhi_temp_delta_c')}C"
+    )
+
+    # Apply asset-level adjustments to city-level scores
+    adj_flood, adj_thermal_score, adj_grid = apply_asset_level_adjustments(
+        flood_base.score,
+        heat_base.score,
+        0.2,  # base grid score before country adjustment
+        asset_factors,
+    )
+
     # Extract raw values for DC KPI computation
     avg_max_temp = heat_base.details.get("avg_max_temp_c", 20.0)
     extreme_heat_days = heat_base.details.get("extreme_heat_days_per_year", 0.0)
@@ -75,9 +95,20 @@ async def assess_datacenter_risk(request: RiskRequest) -> DataCenterRiskReport:
                     600 if region == "EUROPE" else 1000)
 
     # Compute DC-specific KPIs
-    thermal_kpis = compute_thermal_kpis(avg_max_temp, extreme_heat_days, temp_increase_2050, lat)
+    # Apply Urban Heat Island delta to local temperature
+    uhi = asset_factors.get("urban_heat_island", {})
+    uhi_delta = uhi.get("uhi_temp_delta_c", 1.0)
+    effective_temp = avg_max_temp + uhi_delta
+
+    thermal_kpis = compute_thermal_kpis(effective_temp, extreme_heat_days, temp_increase_2050, lat)
     water_kpis = compute_water_stress_kpis(annual_precip, extreme_heat_days * 3, lat, lon)
     grid_kpis = compute_power_grid_kpis(geo.country_code, lat)
+    # Apply substation proximity modifier
+    power_infra = asset_factors.get("power_infrastructure", {})
+    grid_kpis.score = min(max(
+        round(grid_kpis.score - power_infra.get("grid_reliability_modifier", 0.0), 3), 0.05
+    ), 1.0)
+    grid_kpis.level = score_to_level(grid_kpis.score)
     reg_kpis = compute_regulatory_kpis(
         thermal_kpis, water_kpis, flood_base.score, storm_base.score, geo.country_code
     )
@@ -109,11 +140,19 @@ async def assess_datacenter_risk(request: RiskRequest) -> DataCenterRiskReport:
         confidence=water_kpis.confidence,
     )
 
+    # Merge asset-level water proximity into flood details
+    flood_details = {**flood_base.details}
+    water_prox = asset_factors.get("water_proximity", {})
+    if water_prox.get("nearest_water_m"):
+        flood_details["nearest_water_m"] = water_prox["nearest_water_m"]
+        flood_details["water_risk_label"] = water_prox.get("risk_label", "")
+        flood_details["elevation_m"] = asset_factors.get("elevation_m", "N/A")
+
     flood_risk = FloodRisk(
-        score=flood_base.score,
-        level=flood_base.level,
+        score=adj_flood,
+        level=score_to_level(adj_flood),
         zone=str(flood_base.details.get("fema_zone", flood_base.details.get("zone", "Unknown"))),
-        details=flood_base.details,
+        details=flood_details,
         confidence=flood_base.confidence,
     )
 
@@ -124,6 +163,7 @@ async def assess_datacenter_risk(request: RiskRequest) -> DataCenterRiskReport:
         confidence=storm_base.confidence,
     )
 
+    power_infra = asset_factors.get("power_infrastructure", {})
     power_risk = PowerGridRisk(
         score=grid_kpis.score,
         level=grid_kpis.level,
