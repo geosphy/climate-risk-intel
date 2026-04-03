@@ -5,10 +5,10 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Geosphy™ — AI Climate Risk Assessment",
+  title: "Geosphy™ — Data Center Climate Risk Intelligence",
   description:
-    "Open source AI-native climate risk intelligence platform. Enter any address to get flood, heat, and storm risk scores for your physical asset.",
-  keywords: ["climate risk", "flood risk", "heat risk", "storm risk", "FEMA", "NOAA", "AI"],
+    "AI-native climate risk intelligence for data centers. Physical risk assessment with EU regulatory compliance: CSRD/ESRS E1, EU Taxonomy, DORA.",
+  keywords: ["climate risk", "data center", "CSRD", "ESRS E1", "EU Taxonomy", "DORA", "flood risk", "heat risk"],
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>{children}</body>
     </html>
   );

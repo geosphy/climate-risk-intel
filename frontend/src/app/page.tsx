@@ -2,227 +2,438 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CloudLightning,
+  Droplets,
+  FileText,
+  Globe2,
+  Loader2,
+  Server,
+  ShieldCheck,
+  Thermometer,
+  Waves,
+  Zap,
+} from "lucide-react";
 import { assessRisk, APIError } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import SearchBar from "@/components/SearchBar";
 
 const RiskMap = dynamic(() => import("@/components/RiskMap"), { ssr: false });
 
-const RISK_COLORS: Record<string, string> = {
-  Low: "#22c55e", Medium: "#eab308", High: "#f97316", Extreme: "#ef4444"
+// ---------------------------------------------------------------------------
+// Risk helpers
+// ---------------------------------------------------------------------------
+type RiskLevel = "Low" | "Medium" | "High" | "Extreme";
+
+const RISK_BADGE_CLASS: Record<string, string> = {
+  Low:     "border-green-500/40  bg-green-500/10  text-green-400",
+  Medium:  "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",
+  High:    "border-orange-500/40 bg-orange-500/10 text-orange-400",
+  Extreme: "border-red-500/40    bg-red-500/10    text-red-400",
 };
 
-const RISK_BG: Record<string, string> = {
-  Low: "bg-green-100 text-green-800 border-green-300",
-  Medium: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  High: "bg-orange-100 text-orange-800 border-orange-300",
-  Extreme: "bg-red-100 text-red-800 border-red-300",
+const RISK_BAR_CLASS: Record<string, string> = {
+  Low:     "bg-green-500",
+  Medium:  "bg-yellow-500",
+  High:    "bg-orange-500",
+  Extreme: "bg-red-500",
+};
+
+const RISK_GLOW: Record<string, string> = {
+  Low:     "shadow-green-500/10",
+  Medium:  "shadow-yellow-500/10",
+  High:    "shadow-orange-500/10",
+  Extreme: "shadow-red-500/10",
 };
 
 function RiskBadge({ level }: { level: string }) {
   return (
-    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${RISK_BG[level] || RISK_BG.Low}`}>
+    <Badge
+      variant="outline"
+      className={cn(
+        "font-semibold tracking-wide uppercase text-[10px] px-2 py-0.5",
+        RISK_BADGE_CLASS[level] ?? RISK_BADGE_CLASS.Medium
+      )}
+    >
       {level}
-    </span>
+    </Badge>
   );
 }
 
 function ScoreBar({ score, level }: { score: number; level: string }) {
   return (
-    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
-      <div className="h-full rounded-full" style={{ width: `${Math.round(score * 100)}%`, backgroundColor: RISK_COLORS[level] }} />
+    <div className="w-full h-1 rounded-full bg-muted overflow-hidden mt-2">
+      <div
+        className={cn("h-full rounded-full transition-all", RISK_BAR_CLASS[level] ?? "bg-primary")}
+        style={{ width: `${Math.round(score * 100)}%` }}
+      />
     </div>
   );
 }
 
-function KPICard({ icon, title, level, score, kpis }: {
-  icon: string; title: string; level: string; score: number; kpis: { label: string; value: string }[]
+// ---------------------------------------------------------------------------
+// KPI Card with Table inside
+// ---------------------------------------------------------------------------
+function KPICard({
+  icon: Icon,
+  title,
+  level,
+  score,
+  rows,
+}: {
+  icon: React.ElementType;
+  title: string;
+  level: string;
+  score: number;
+  rows: { label: string; value: React.ReactNode }[];
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{icon}</span>
-          <span className="font-semibold text-gray-800 text-sm">{title}</span>
-        </div>
-        <RiskBadge level={level} />
-      </div>
-      <ScoreBar score={score} level={level} />
-      <div className="mt-3 space-y-1">
-        {kpis.map((kpi, i) => (
-          <div key={i} className="flex justify-between text-xs text-gray-600">
-            <span className="text-gray-400">{kpi.label}</span>
-            <span className="font-medium">{kpi.value}</span>
+    <Card className={cn("shadow-lg", RISK_GLOW[level])}>
+      <CardHeader className="pb-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Icon className="w-4 h-4" />
+            <CardTitle className="text-sm font-medium">{title}</CardTitle>
           </div>
-        ))}
-      </div>
-    </div>
+          <RiskBadge level={level} />
+        </div>
+        <div className="flex items-center justify-between pt-1">
+          <CardDescription className="text-xs">
+            Score: {Math.round(score * 100)}/100
+          </CardDescription>
+        </div>
+        <ScoreBar score={score} level={level} />
+      </CardHeader>
+      <CardContent className="pt-0 pb-3">
+        <Table>
+          <TableBody>
+            {rows.map((row, i) => (
+              <TableRow key={i} className="border-b-0 hover:bg-transparent">
+                <TableCell className="py-1 px-0 text-xs text-muted-foreground w-1/2">
+                  {row.label}
+                </TableCell>
+                <TableCell className="py-1 px-0 text-xs font-medium text-right">
+                  {row.value}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Overall score display
+// ---------------------------------------------------------------------------
+function OverallScore({ level, score, address }: { level: string; score: number; address: string }) {
+  const COLOR: Record<string, string> = {
+    Low: "text-green-400", Medium: "text-yellow-400",
+    High: "text-orange-400", Extreme: "text-red-400",
+  };
+  return (
+    <Card className="border-border/50">
+      <CardContent className="pt-5 pb-5">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+          {/* Score circle */}
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
+            <div className={cn("text-5xl font-bold tabular-nums", COLOR[level] ?? "text-foreground")}>
+              {Math.round(score * 100)}
+              <span className="text-xl text-muted-foreground font-normal">/100</span>
+            </div>
+            <RiskBadge level={level} />
+          </div>
+          {/* Separator */}
+          <div className="hidden sm:block w-px h-16 bg-border" />
+          {/* Address + weights */}
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-sm text-foreground font-medium leading-snug">{address}</p>
+            <p className="text-xs text-muted-foreground">
+              Weighted across 6 pillars: Thermal 28% · Flood 22% · Water 20% · Storm 15% · Grid 15%
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
 export default function HomePage() {
   const [report, setReport] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (address: string) => {
-    setIsLoading(true); setError(null); setReport(null);
+    setIsLoading(true);
+    setError(null);
+    setReport(null);
     try {
       const result = await assessRisk({ address, asset_type: "data_center" });
       setReport(result);
     } catch (err) {
-      setError(err instanceof APIError ? (err.detail || err.message) : "Unexpected error. Please try again.");
-    } finally { setIsLoading(false); }
+      setError(
+        err instanceof APIError
+          ? err.detail || err.message
+          : "Unexpected error. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const r = report;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-950">
-      {/* Header */}
-      <div className="text-white pt-10 pb-6 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="text-3xl">🏢</span>
-            <h1 className="text-2xl sm:text-3xl font-bold">Geosphy&#8482;</h1>
+    <div className="min-h-screen bg-background">
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-md">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 shrink-0">
+            <Globe2 className="w-5 h-5 text-primary" />
+            <span className="font-bold text-sm tracking-tight">Geosphy™</span>
+            <span className="hidden sm:inline text-muted-foreground text-xs ml-1">
+              Data Center Climate Risk
+            </span>
           </div>
-          <p className="text-blue-200 text-sm mb-1">Data Center Climate Risk Intelligence</p>
-          <p className="text-blue-300 text-xs opacity-70 mb-5">
-            CSRD / ESRS E1 · EU Taxonomy · DORA · EU Delegated Reg 2024/1364
-          </p>
-          <div className="flex justify-center">
-            <SearchBar onSearch={handleSearch} isLoading={isLoading} />
-          </div>
+          <Badge variant="outline" className="text-xs shrink-0">CSRD · EU Taxonomy · DORA</Badge>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-4xl mx-auto px-4 pb-10 space-y-4">
-        {/* Loading */}
-        {isLoading && (
-          <div className="text-center py-10 text-white">
-            <div className="inline-flex items-center gap-3">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-              <span className="text-sm">Analysing climate risk across 6 pillars...</span>
-            </div>
+      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+        {/* ── Search ── */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="text-center space-y-1">
+            <h1 className="text-xl font-semibold">Data Center Climate Risk Assessment</h1>
+            <p className="text-sm text-muted-foreground">
+              Enter an address to generate an EU-compliant physical risk report
+            </p>
           </div>
-        )}
+          <SearchBar onSearch={handleSearch} isLoading={isLoading} />
+        </div>
 
-        {/* Error */}
+        {/* ── Error ── */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
-            <strong>Error:</strong> {error}
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardContent className="pt-4 pb-4 flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {error}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Loading ── */}
+        {isLoading && (
+          <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+            <Loader2 className="w-7 h-7 animate-spin text-primary" />
+            <p className="text-sm">Analysing climate risk across 6 pillars…</p>
           </div>
         )}
 
-        {/* Map */}
-        <RiskMap report={r ? { latitude: r.latitude, longitude: r.longitude, overall_risk: { level: r.overall_risk_level, score: r.overall_risk_score }, canonical_address: r.canonical_address } : null} />
-
-        {/* Results */}
+        {/* ── Map (always visible once report loads) ── */}
         {r && (
+          <RiskMap
+            report={{
+              latitude: r.latitude,
+              longitude: r.longitude,
+              overall_risk: { level: r.overall_risk_level, score: r.overall_risk_score },
+              canonical_address: r.canonical_address,
+            }}
+          />
+        )}
+
+        {/* ── Report ── */}
+        {r && !isLoading && (
           <>
-            {/* Overall Banner */}
-            <div className="rounded-xl p-4 text-white text-center" style={{ backgroundColor: RISK_COLORS[r.overall_risk_level] }}>
-              <div className="text-xs opacity-80 mb-1">Overall Climate Risk Score</div>
-              <div className="text-3xl font-bold">{r.overall_risk_level}</div>
-              <div className="text-sm opacity-80">{Math.round(r.overall_risk_score * 100)}/100 · {r.canonical_address}</div>
-            </div>
+            {/* Overall */}
+            <OverallScore
+              level={r.overall_risk_level}
+              score={r.overall_risk_score}
+              address={r.canonical_address}
+            />
 
             {/* 6 KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <KPICard
-                icon="🌡️" title="Thermal Stress" level={r.thermal_risk.level} score={r.thermal_risk.score}
-                kpis={[
+                icon={Thermometer}
+                title="Thermal Stress"
+                level={r.thermal_risk.level}
+                score={r.thermal_risk.score}
+                rows={[
                   { label: "Cooling Degree Days", value: `${Math.round(r.thermal_risk.cooling_degree_days)} CDD/yr` },
-                  { label: "Days >35°C/yr", value: `${r.thermal_risk.days_above_35c}` },
-                  { label: "2050 Temp Increase", value: `+${r.thermal_risk.projected_temp_increase_2050_c}°C` },
+                  { label: "Days above 35°C/yr", value: String(r.thermal_risk.days_above_35c) },
+                  { label: "2050 temp increase", value: `+${r.thermal_risk.projected_temp_increase_2050_c}°C` },
                   { label: "ASHRAE Class", value: r.thermal_risk.ashrae_class_required },
-                  { label: "PUE Impact", value: `${Math.round(r.thermal_risk.pue_impact_score * 100)}%` },
+                  { label: "PUE impact score", value: `${Math.round(r.thermal_risk.pue_impact_score * 100)}%` },
                 ]}
               />
+
               <KPICard
-                icon="🌊" title="Flood Risk" level={r.flood_risk.level} score={r.flood_risk.score}
-                kpis={[
-                  { label: "Zone", value: r.flood_risk.zone },
+                icon={Waves}
+                title="Flood Risk"
+                level={r.flood_risk.level}
+                score={r.flood_risk.score}
+                rows={[
+                  { label: "Flood Zone", value: r.flood_risk.zone },
                   { label: "Confidence", value: r.flood_risk.confidence },
                 ]}
               />
+
               <KPICard
-                icon="💧" title="Water Stress" level={r.water_risk.level} score={r.water_risk.score}
-                kpis={[
+                icon={Droplets}
+                title="Water Stress"
+                level={r.water_risk.level}
+                score={r.water_risk.score}
+                rows={[
                   { label: "WRI Aqueduct Index", value: `${r.water_risk.water_stress_index}/5` },
                   { label: "WUE Status", value: r.water_risk.wue_compliance_status },
                   { label: "EU Reg 2024/1364", value: r.water_risk.regulation_exposure },
                   { label: "2050 Scarcity", value: r.water_risk.water_scarcity_2050 },
                 ]}
               />
+
               <KPICard
-                icon="🌀" title="Storm & Wind" level={r.storm_risk.level} score={r.storm_risk.score}
-                kpis={[
+                icon={CloudLightning}
+                title="Storm & Wind"
+                level={r.storm_risk.level}
+                score={r.storm_risk.score}
+                rows={[
                   { label: "Confidence", value: r.storm_risk.confidence },
                 ]}
               />
+
               <KPICard
-                icon="⚡" title="Power Grid" level={r.power_grid_risk.level} score={r.power_grid_risk.score}
-                kpis={[
+                icon={Zap}
+                title="Power Grid"
+                level={r.power_grid_risk.level}
+                score={r.power_grid_risk.score}
+                rows={[
                   { label: "Grid Reliability", value: `${Math.round(r.power_grid_risk.grid_reliability * 100)}%` },
                   { label: "Renewables", value: `${r.power_grid_risk.renewable_energy_pct}%` },
                   { label: "Carbon Intensity", value: `${r.power_grid_risk.carbon_intensity_gco2_kwh} gCO₂/kWh` },
                 ]}
               />
+
+              {/* Regulatory — uses esrs score as the 0-1 score */}
               <KPICard
-                icon="📋" title="Regulatory" level={r.regulatory_compliance.esrs_e1_physical_risk_score >= 60 ? "High" : r.regulatory_compliance.esrs_e1_physical_risk_score >= 35 ? "Medium" : "Low"} score={r.regulatory_compliance.esrs_e1_physical_risk_score / 100}
-                kpis={[
+                icon={ShieldCheck}
+                title="Regulatory"
+                level={
+                  r.regulatory_compliance.esrs_e1_physical_risk_score >= 60
+                    ? "High"
+                    : r.regulatory_compliance.esrs_e1_physical_risk_score >= 35
+                    ? "Medium"
+                    : "Low"
+                }
+                score={r.regulatory_compliance.esrs_e1_physical_risk_score / 100}
+                rows={[
                   { label: "ESRS E1 Score", value: `${r.regulatory_compliance.esrs_e1_physical_risk_score}/100` },
                   { label: "EU Taxonomy", value: r.regulatory_compliance.eu_taxonomy_alignment.split(" ")[0] },
-                  { label: "DORA ICT Flag", value: r.regulatory_compliance.dora_ict_risk_flag ? "⚠️ Yes" : "✓ No" },
+                  {
+                    label: "DORA ICT Risk",
+                    value: r.regulatory_compliance.dora_ict_risk_flag ? (
+                      <span className="text-orange-400">⚠ Flagged</span>
+                    ) : (
+                      <span className="text-green-400">✓ Clear</span>
+                    ),
+                  },
+                  { label: "CSRD Materiality", value: r.regulatory_compliance.csrd_materiality },
                 ]}
               />
             </div>
 
-            {/* Required Disclosures */}
-            <div className="bg-blue-950 border border-blue-800 rounded-xl p-4">
-              <h3 className="text-white font-semibold text-sm mb-2">📄 Required EU Disclosures</h3>
-              <ul className="space-y-1">
-                {r.regulatory_compliance.required_disclosures.map((d: string, i: number) => (
-                  <li key={i} className="text-blue-200 text-xs flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">→</span>{d}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-2 text-xs text-blue-400 border-t border-blue-800 pt-2">
-                CSRD Materiality: {r.regulatory_compliance.csrd_materiality}
-              </div>
-            </div>
+            {/* Required EU Disclosures */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <CardTitle className="text-sm">Required EU Disclosures</CardTitle>
+                </div>
+                <CardDescription className="text-xs">
+                  Obligations triggered at current risk levels
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Table>
+                  <TableBody>
+                    {r.regulatory_compliance.required_disclosures.map((d: string, i: number) => (
+                      <TableRow key={i} className="border-b-0 hover:bg-transparent">
+                        <TableCell className="py-1.5 px-0 flex items-start gap-2 text-sm text-muted-foreground">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
+                          {d}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
 
             {/* AI Narrative */}
             {r.ai_narrative && (
-              <div className="bg-gradient-to-br from-slate-800 to-blue-900 rounded-xl border border-blue-700 p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">🤖</span>
-                  <span className="font-semibold text-white text-sm">ESRS E1 Risk Narrative</span>
-                  <span className="text-xs text-blue-300 bg-blue-900 px-2 py-0.5 rounded-full border border-blue-700">Claude AI</span>
-                </div>
-                {r.ai_narrative.split("\n\n").map((para: string, i: number) => (
-                  <p key={i} className="text-blue-100 text-sm leading-relaxed mb-3">{para}</p>
-                ))}
-              </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Server className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-sm">ESRS E1 Risk Narrative</CardTitle>
+                    <Badge variant="secondary" className="text-xs ml-1 font-normal">
+                      Claude AI · for review
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs">
+                    Draft disclosure text for CSRD sustainability report
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {r.ai_narrative.split("\n\n").map((para: string, i: number) => (
+                      <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                        {para}
+                      </p>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Data Sources */}
-            <div className="text-center text-blue-400 text-xs opacity-50">
-              Data: {r.data_sources.join(" · ")}
-            </div>
+            {r.data_sources?.length > 0 && (
+              <p className="text-center text-xs text-muted-foreground/50">
+                Sources: {r.data_sources.join(" · ")}
+              </p>
+            )}
           </>
         )}
 
+        {/* Empty state */}
         {!r && !isLoading && !error && (
-          <p className="text-center text-blue-300 text-sm opacity-50 mt-2">
-            Enter a data center address to generate an EU-compliant climate risk report
-          </p>
+          <div className="flex flex-col items-center gap-3 py-20 text-muted-foreground">
+            <Server className="w-10 h-10 opacity-20" />
+            <p className="text-sm">Enter a data center address above to begin</p>
+          </div>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
