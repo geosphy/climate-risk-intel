@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.api.routes import risk, health
+from app.api.routes import risk, health, simulate
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +41,7 @@ app.add_middleware(
 # Register routes
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(risk.router, prefix="/api", tags=["Risk Assessment"])
+app.include_router(simulate.router, prefix="/api", tags=["Stochastic Simulation"])
 
 
 @app.on_event("startup")

@@ -35,8 +35,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import SearchBar from "@/components/SearchBar";
+import SimulationPanel from "@/components/SimulationPanel";
 
 const RiskMap = dynamic(() => import("@/components/RiskMap"), { ssr: false });
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // ---------------------------------------------------------------------------
 // Risk helpers
@@ -423,6 +426,20 @@ export default function HomePage() {
                 Sources: {r.data_sources.join(" · ")}
               </p>
             )}
+
+            {/* ── Stochastic Simulation Panel ── */}
+            <SimulationPanel
+              apiUrl={API_URL}
+              location={r.canonical_address}
+              scores={{
+                thermal_score: r.thermal_risk.score,
+                flood_score:   r.flood_risk.score,
+                water_score:   r.water_risk.score,
+                storm_score:   r.storm_risk.score,
+                grid_score:    r.power_grid_risk.score,
+                overall_score: r.overall_risk_score,
+              }}
+            />
           </>
         )}
 

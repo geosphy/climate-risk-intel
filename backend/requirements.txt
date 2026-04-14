@@ -7,3 +7,4 @@ python-dotenv==1.0.1
 anthropic==0.40.0
 reverse-geocoder==1.5.1
 pycountry==24.6.1
+reportlab==4.2.5
