@@ -43,7 +43,13 @@ function fmt(usd: number): string {
 
 const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface TornadoTooltipProps {
+  active?: boolean;
+  payload?: { payload: ROISensitivityItem }[];
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload }: TornadoTooltipProps) => {
   if (!active || !payload?.length) return null;
   const d: ROISensitivityItem = payload[0]?.payload;
   return (
@@ -57,9 +63,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-const CustomYAxisTick = ({ x, y, payload }: any) => (
+interface YAxisTickProps {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+}
+
+const CustomYAxisTick = ({ x = 0, y = 0, payload }: YAxisTickProps) => (
   <text x={x} y={y} dy={4} textAnchor="end" fill="#94a3b8" fontSize={11}>
-    {payload.value}
+    {payload?.value ?? ""}
   </text>
 );
 

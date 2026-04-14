@@ -282,7 +282,7 @@ export default function SimulationPanel({ scores, apiUrl, location = "Unknown Lo
                   <p className="text-sm font-semibold text-white">Risk Pillar Uncertainty Bands</p>
                   <span className="ml-auto text-xs text-slate-500">{result.n_iterations.toLocaleString()} iterations</span>
                 </div>
-                <UncertaintyChart bands={result.pillar_bands} />
+                <UncertaintyChart bands={result.pillar_bands} nIterations={result.n_iterations} />
               </div>
 
               {/* Tornado sensitivity chart */}

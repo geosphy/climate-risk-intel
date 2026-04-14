@@ -28,17 +28,25 @@ interface PercentileBand {
 
 interface UncertaintyChartProps {
   bands: PercentileBand[];
+  nIterations?: number;
 }
 
-// Pillar colour palette (dark-mode friendly)
-const PILLAR_COLORS: Record<string, string> = {
-  Thermal:  "#f97316",
-  Flood:    "#3b82f6",
-  Water:    "#06b6d4",
-  Storm:    "#a855f7",
-  Grid:     "#eab308",
-  Overall:  "#ef4444",
-};
+interface TooltipPayloadItem {
+  payload?: {
+    floor: number;
+    low_outer: number;
+    iqr: number;
+    high_outer: number;
+    median: number;
+    point: number;
+  };
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string;
+}
 
 // Transform flat bands array → one data-point per pillar for bar-style uncertainty chart
 function buildChartData(bands: PercentileBand[]) {
@@ -54,7 +62,7 @@ function buildChartData(bands: PercentileBand[]) {
   }));
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   if (!d) return null;
@@ -73,13 +81,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export default function UncertaintyChart({ bands }: UncertaintyChartProps) {
+export default function UncertaintyChart({ bands, nIterations = 1000 }: UncertaintyChartProps) {
   const data = buildChartData(bands);
 
   return (
     <div className="w-full">
       <p className="mb-3 text-xs text-slate-400">
-        Uncertainty bands from {"{n}"} Monte Carlo iterations. Darker centre = IQR (p25–p75); lighter wings = p10–p90 range.
+        Uncertainty bands from {nIterations.toLocaleString()} Monte Carlo iterations. Darker centre = IQR (p25–p75); lighter wings = p10–p90 range.
       </p>
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart
