@@ -29,11 +29,12 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow frontend to call the API
+# CORS — allow all origins (supports bolt.new, Vercel, localhost, and any future frontends)
+_origins = settings.cors_origins_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_origins=_origins,
+    allow_credentials="*" not in _origins,  # credentials=True only when origins are explicit
     allow_methods=["*"],
     allow_headers=["*"],
 )

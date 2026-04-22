@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Server
     backend_port: int = 8000
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "*"
 
     # App
     log_level: str = "INFO"
